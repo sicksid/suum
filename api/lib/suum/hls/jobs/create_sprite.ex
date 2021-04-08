@@ -20,8 +20,7 @@ defmodule Suum.Hls.Jobs.CreateSprite do
       sprite ->
         Logger.info("Saving generated sprite #{inspect(sprite, pretty: true)}")
 
-        {:ok, _transmission} =
-          Hls.update_transmission(transmission, %{sprite: sprite})
+        {:ok, _transmission} = Hls.update_transmission(transmission, %{sprite: sprite})
     end
   end
 

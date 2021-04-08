@@ -2,8 +2,6 @@ defmodule SuumWeb.TransmitChannel do
   use Phoenix.Channel
   require Logger
 
-  @ffmpeg_args ~w(-i - -c:v libx264 -preset veryfast -tune zerolatency -c:a aac -ar 44100 -b:a 64k -y -use_wallclock_as_timestamps 1 -async 1 -bufsize 1000 -f flv)
-
   @impl true
   def join("transmit:" <> transmission_uuid, _message, socket) do
     {:ok,
@@ -17,8 +15,7 @@ defmodule SuumWeb.TransmitChannel do
   def terminate(reason, %{assigns: %{porcelain_process: porcelain_process}} = _socket)
       when not is_nil(porcelain_process) do
     Logger.error("Exited #{inspect(reason)}")
-    Porcelain.Process.stop(porcelain_process)
-    :ok
+    :exec.kill(porcelain_process, 0)
   end
 
   def terminate(reason, _) do
@@ -33,16 +30,16 @@ defmodule SuumWeb.TransmitChannel do
         %{assigns: %{porcelain_process: porcelain_process}} = socket
       )
       when not is_nil(porcelain_process) and not is_nil(data) do
-    Porcelain.Process.send_input(porcelain_process, Base.decode64!(data))
+    :ok = :exec.send(porcelain_process, Base.decode64!(data))
     {:noreply, socket}
   end
 
   def handle_in(
         "segment",
         %{"data" => "data:video/webm;codecs=vp8;base64," <> data},
-        socket
+        %{assigns: %{porcelain_process: porcelain_process}} = socket
       ) do
-    Porcelain.Process.send_input(socket.assigns.porcelain_process, Base.decode64!(data))
+    :ok = :exec.send(porcelain_process, Base.decode64!(data))
     {:noreply, socket}
   end
 
@@ -51,11 +48,45 @@ defmodule SuumWeb.TransmitChannel do
         _params,
         socket
       ) do
+    Logger.warn("couldnt process segment")
     {:noreply, socket}
   end
 
   defp spawn_ffmpeg(transmission_uuid) do
-    Porcelain.spawn("ffmpeg", @ffmpeg_args ++ ["#{rtmp_host()}/live/#{transmission_uuid}"])
+    command = ~w(
+      /usr/local/bin/ffmpeg
+      -i pipe:0
+      -hide_banner
+      -loglevel fatal
+      -stats
+      -fflags nobuffer
+      -rtsp_transport tcp
+      -preset ultrafast
+      -c:a copy
+      -c:v copy
+      -f flv
+      #{rtmp_host()}/live/#{transmission_uuid}
+    )
+
+    {:ok, pid, _os_pid} = :exec.run_link(command, [:stdin, {:stderr, self()}, :monitor])
+
+    pid
+  end
+
+  @impl true
+  def handle_info({:stderr, os_pid, message}, state) do
+    Logger.error("#{os_pid} - #{message}")
+    {:noreply, state}
+  end
+
+  def handle_info({:stdout, os_pid, message}, state) do
+    Logger.error("#{inspect(os_pid)} - #{inspect(message)}")
+    {:noreply, state}
+  end
+
+  def handle_info(request, state) do
+    Logger.error("#{inspect(request, pretty: true)}")
+    {:noreply, state}
   end
 
   defp rtmp_host, do: System.get_env("RTMP_HOST", "rtmp://localhost:1935")

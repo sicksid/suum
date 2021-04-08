@@ -34,24 +34,30 @@ const TransmissionPreview: React.FC<Props> = ({ uuid, preview, user, slug, name,
   const debouncedBlurring = useDebounce(() => setHovering(false), 500)
   const onClick = () => history.push(EDIT_TRANSMISSION_URL)
 
-  return (<Box h="250" onMouseOver={() => setHovering(true)} onMouseLeave={debouncedBlurring}>
-    <Box display="flex" justifyContent="center" bg="black" onClick={() => history.push(VIEW_TRANSMISSION_URL)}>
-      <Image
-        maxH="200"
-        boxSize="200px"
-        objectFit="cover"
-        src={preview}
-        alt={name} />
-    </Box>
-    {currentUser && currentUser.uuid === user.uuid && isHovering && <VStack onMouseLeave={debouncedBlurring} onMouseOver={() => setHovering(true)} >
-      <Button onMouseOver={() => setHovering(true)} onClick={onClick} leftIcon={<FaEdit />}>
-        Edit
+  return (
+    <Box
+      h="250"
+      maxW="480"
+      onMouseOver={() => setHovering(true)}
+      onMouseLeave={debouncedBlurring}>
+      <Box display="flex" justifyContent="center" bg="black" onClick={() => history.push(VIEW_TRANSMISSION_URL)}>
+        <Image
+          maxH="200"
+          boxSize="200px"
+          objectFit="cover"
+          src={preview}
+          alt={name} />
+      </Box>
+      {currentUser && currentUser.uuid === user.uuid && isHovering && <VStack onMouseLeave={debouncedBlurring} onMouseOver={() => setHovering(true)} >
+        <Button onMouseOver={() => setHovering(true)} onClick={onClick} leftIcon={<FaEdit />}>
+          Edit
       </Button>
-    </VStack>
-    }
-    <Text fontSize="sm">
-      {name}
-    </Text>
-  </Box>)
+      </VStack>
+      }
+      <Text fontSize="sm">
+        {name}
+      </Text>
+    </Box>
+  )
 }
 export default TransmissionPreview

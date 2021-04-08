@@ -1,9 +1,13 @@
 defmodule SuumWeb.RtmpController do
-  @transmissions_base_path "./mnt/hls/live"
-
   use SuumWeb, :controller
   require Logger
-  alias Suum.{Hls.Jobs, Hls.Transmissions.Observer, Hls}
+
+  alias Suum.{
+    Hls,
+    Hls.Jobs,
+    Hls.Transmissions.Kickstarter,
+    Hls.Transmission
+  }
 
   @spec on_publish(Plug.Conn.t(), map) :: Plug.Conn.t()
   def on_publish(
@@ -21,32 +25,35 @@ defmodule SuumWeb.RtmpController do
           "type" => _type
         } = _params
       ) do
-    {:ok, pid} =
-      Observer.start_link(%{
-        transmission_uuid: transmission_uuid,
-        transmissions_base_path: @transmissions_base_path
-      })
-
-    GenServer.cast(pid, :sync)
-    transmission = Hls.get_transmission(transmission_uuid)
-
-    {:ok, %Hls.Transmission{}} =
-      Hls.update_transmission(transmission, %{
-        pid: :erlang.pid_to_list(pid),
-        ip_address: ip_address,
-        type: :live
-      })
-
-    send_resp(conn, 200, "")
+    with %Hls.Transmission{} = transmission <- Hls.get_transmission(transmission_uuid),
+         {:ok, _} <-
+           Hls.update_transmission(transmission, %{
+             ip_address: ip_address
+           }),
+         {:ok, _pid} <- Kickstarter.process(transmission),
+         {:ok, _} <- maybe_transition_to_streaming(transmission) do
+      send_resp(conn, 200, "")
+    end
   end
 
   @spec on_publish_done(Plug.Conn.t(), map) :: Plug.Conn.t()
-  def on_publish_done(conn, %{"name" => transmission_uuid, "call" => "done"} = _params) do
-    Logger.info("VOD - #{transmission_uuid} | creating sprites")
-    transmission = Hls.get_transmission(transmission_uuid)
-    Hls.update_transmission(transmission, %{pid: nil, type: :vod})
-    GenServer.call(:erlang.list_to_pid(transmission.pid), :stop)
-    Jobs.CreateSprite.enqueue!(transmission_uuid)
-    send_resp(conn, 200, "")
+  def on_publish_done(
+        conn,
+        %{"name" => transmission_uuid, "call" => "publish_done"} = _params
+      ) do
+    Logger.info("Transmission - #{transmission_uuid} finished | creating sprites")
+
+    with %Hls.Transmission{} = transmission <- Hls.get_transmission(transmission_uuid),
+         :ok <- Jobs.CreateSprite.enqueue!(transmission_uuid),
+         {:ok, _} <- Transmission.transition_to(transmission, "processing") do
+      send_resp(conn, 200, "")
+    end
   end
+
+  defp maybe_transition_to_streaming(%Transmission{type: :live} = transmission) do
+    Transmission.transition_to(transmission, "streaming")
+  end
+
+  defp maybe_transition_to_streaming(%Transmission{type: :vod} = transmission),
+    do: {:ok, transmission}
 end

@@ -9,6 +9,7 @@ defmodule Suum.Schema do
       import Slugy
 
       @primary_key {:uuid, :binary_id, autogenerate: true}
+      @type t :: %__MODULE__{}
       @foreign_key_type :binary_id
       @derive {Phoenix.Param, key: :uuid}
     end

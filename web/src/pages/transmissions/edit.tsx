@@ -57,8 +57,7 @@ const Edit: React.FC = () => {
     if (video) {
       video.play()
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm',
-        videoBitsPerSecond: 3000000
+        mimeType: 'video/webm;codecs=h264'
       })
 
       mediaRecorder.ondataavailable = onDataAvailable

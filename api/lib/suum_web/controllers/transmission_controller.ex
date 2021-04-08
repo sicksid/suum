@@ -22,7 +22,6 @@ defmodule SuumWeb.TransmissionController do
              segments
            ),
          targetduration <- get_targetduration(segments) do
-      Logger.info(inspect(Enum.map(segments, & &1.uuid), pretty: true))
       Logger.info("Segments loaded #{length(segments)}")
 
       conn
